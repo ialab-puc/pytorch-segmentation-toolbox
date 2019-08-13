@@ -1,0 +1,8 @@
+MS_DeepLab_resnet_pretrained_init.pth
+pyenv/*
+*/bn.o
+cityscapes
+.vscode
+tensoboardX
+*.pyc
+snapshots/*
