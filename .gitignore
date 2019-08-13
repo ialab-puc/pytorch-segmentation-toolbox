@@ -3,6 +3,6 @@ pyenv/*
 */bn.o
 cityscapes
 .vscode
-tensoboardX
+tensorboardX
 *.pyc
 snapshots/*
