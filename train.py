@@ -201,8 +201,8 @@ def main():
     interp = nn.Upsample(size=input_size, mode='bilinear', align_corners=True)
     print("Initialized Upsampler")
 
+    print("Starting...")
     for i_iter, batch in enumerate(trainloader):
-        print("Starting...")
         i_iter += args.start_iters
         images, labels, _, _ = batch
         images = images.cuda()
