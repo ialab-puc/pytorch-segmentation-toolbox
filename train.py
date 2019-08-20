@@ -193,15 +193,16 @@ def main():
     trainloader = data.DataLoader(CSDataSet(args.data_dir, args.data_list, max_iters=args.num_steps*args.batch_size, crop_size=input_size, 
                     scale=args.random_scale, mirror=args.random_mirror, mean=IMG_MEAN), 
                     batch_size=args.batch_size, shuffle=True, num_workers=4, pin_memory=True)
-
+    print("Loaded dataset")
     optimizer = optim.SGD([{'params': filter(lambda p: p.requires_grad, deeplab.parameters()), 'lr': args.learning_rate }], 
                 lr=args.learning_rate, momentum=args.momentum,weight_decay=args.weight_decay)
     optimizer.zero_grad()
-
+    print("Initialized SGD")
     interp = nn.Upsample(size=input_size, mode='bilinear', align_corners=True)
-
+    print("Initialized Upsampler")
 
     for i_iter, batch in enumerate(trainloader):
+        print("Starting...")
         i_iter += args.start_iters
         images, labels, _, _ = batch
         images = images.cuda()
