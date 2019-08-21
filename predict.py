@@ -80,7 +80,7 @@ def main():
     data_list = []
     confusion_matrix = np.zeros((args.num_classes,args.num_classes))
     palette = get_palette(256)
-    interp = nn.Upsample(size=(1024, 2048), mode='bilinear', align_corners=True)
+    # interp = nn.Upsample(size=(1024, 2048), mode='bilinear', align_corners=True)
 
     if not os.path.exists('outputs'):
         os.makedirs('outputs')
@@ -97,6 +97,7 @@ def main():
         seg_pred = np.asarray(np.argmax(output, axis=2), dtype=np.uint8)
         output_im = PILImage.fromarray(seg_pred)
         output_im.putpalette(palette)
+        output_im = output_im.crop((0, 0, w, h))
         output_im.save('outputs/'+name[0]+'.png')
 
 if __name__ == '__main__':
