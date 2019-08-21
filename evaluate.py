@@ -185,7 +185,7 @@ def main():
     """Create the model and start the evaluation process."""
     args = get_arguments()
 
-    # gpu0 = args.gpu
+
     os.environ["CUDA_VISIBLE_DEVICES"]=args.gpu
     h, w = map(int, args.input_size.split(','))
     if args.whole:

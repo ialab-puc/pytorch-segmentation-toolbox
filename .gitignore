@@ -6,3 +6,4 @@ cityscapes
 tensorboardX
 *.pyc
 snapshots/*
+results/
