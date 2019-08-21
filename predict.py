@@ -88,7 +88,7 @@ def main():
     for index, batch in enumerate(testloader):
         if index % 100 == 0:
             print('%d processd'%(index))
-        image, size, name = batch
+        image, name, size = batch
         size = size[0].numpy()
         with torch.no_grad():
             output = predict_sliding(model, image.numpy(), input_size, args.num_classes, True, args.recurrence)
