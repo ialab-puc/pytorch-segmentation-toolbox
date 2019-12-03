@@ -9,9 +9,11 @@ affine_par = True
 import functools
 
 import sys, os
-
-from libs import InPlaceABN, InPlaceABNSync
-BatchNorm2d = functools.partial(InPlaceABNSync, activation='none')
+if torch.__version__[0] == '1':
+    from inplace_abn import InPlaceABN,InPlaceABNSync
+else:
+    from libs import InPlaceABN, InPlaceABNSync
+BatchNorm2d = functools.partial(InPlaceABNSync, activation='identity')
 
 def conv3x3(in_planes, out_planes, stride=1):
     "3x3 convolution with padding"

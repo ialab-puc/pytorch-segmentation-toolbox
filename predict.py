@@ -7,6 +7,7 @@ import sys
 import json
 
 import torch
+
 from torch.autograd import Variable
 import torchvision.models as models
 import torch.nn.functional as F
@@ -18,9 +19,13 @@ import os
 import scipy.ndimage as nd
 from math import ceil
 from PIL import Image as PILImage
-from evaluate import get_palette, predict_multiscale, predict_sliding, get_confusion_matrix
+from evaluate import get_palette, predict_multiscale, predict_sliding, get_confusion_matrix, predict_whole
 
 import torch.nn as nn
+if torch.__version__[0] == '1':
+    import torch.distributed as dist
+    dist.init_process_group('gloo', init_method='file:///tmp/tmpfile', rank=0, world_size=1)
+
 IMG_MEAN = np.array((104.00698793,116.66876762,122.67891434), dtype=np.float32)
 
 DATA_DIRECTORY = 'cityscapes'
@@ -74,7 +79,7 @@ def main():
     model.eval()
     model.cuda()
 
-    testloader = data.DataLoader(CSDataTestSet(args.data_dir, args.data_list, crop_size=(1024, 2048), mean=IMG_MEAN), 
+    testloader = data.DataLoader(CSDataTestSet(args.data_dir, args.data_list, crop_size=input_size, mean=IMG_MEAN), 
                                     batch_size=1, shuffle=False, pin_memory=True)
 
     data_list = []
@@ -91,13 +96,12 @@ def main():
         image, name, size = batch
         size = size[0].numpy()
         with torch.no_grad():
-            output = predict_sliding(model, image.numpy(), input_size, args.num_classes, True, args.recurrence)
-        # padded_prediction = model(Variable(image, volatile=True).cuda())
-        # output = interp(padded_prediction).cpu().data[0].numpy().transpose(1,2,0)
+            # output = predict_sliding(model, image.numpy(), input_size, args.num_classes, True, args.recurrence)
+            output = predict_whole(model, image.numpy(), input_size, args.recurrence)
         seg_pred = np.asarray(np.argmax(output, axis=2), dtype=np.uint8)
         output_im = PILImage.fromarray(seg_pred)
         output_im.putpalette(palette)
-        output_im = output_im.crop((0, 0, w, h))
+        # output_im = output_im.crop((0, 0, w, h))
         output_im.save('outputs/'+name[0]+'.png')
 
 if __name__ == '__main__':

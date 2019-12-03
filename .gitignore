@@ -7,3 +7,4 @@ tensorboardX
 *.pyc
 snapshots/*
 results/
+outputs
