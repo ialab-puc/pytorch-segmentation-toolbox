@@ -8,3 +8,4 @@ tensorboardX
 snapshots/*
 results/
 outputs
+apex
