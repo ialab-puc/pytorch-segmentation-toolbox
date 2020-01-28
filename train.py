@@ -1,4 +1,5 @@
 import argparse
+from comet_ml import Experiment
 
 import torch
 import torch.nn as nn
@@ -20,7 +21,6 @@ from dataset.datasets import CSDataSet
 import random
 import time
 import logging
-from tensorboardX import SummaryWriter
 from utils.pyt_utils import decode_labels, inv_preprocess, decode_predictions
 from loss.criterion import CriterionDSN, CriterionOhemDSN
 from engine import Engine
@@ -149,6 +149,22 @@ def main():
     with Engine(custom_parser=parser) as engine:
         args = parser.parse_args()
 
+        # Add the following code anywhere in your machine learning file
+        if (not engine.distributed) or (engine.distributed and engine.local_rank == 0):
+            experiment = Experiment(api_key="",
+                                    project_name="general", workspace="ironcadiz",
+                                    auto_param_logging=False,
+                                    auto_metric_logging=False
+                                    )
+            experiment.add_tags(["pspnet","segmentation"])
+            experiment.log_parameters(
+                {
+                    "batch_size": args.batch_size,
+                    "attribute": "segmentation"
+                }
+            )
+
+
         cudnn.benchmark = True
         seed = args.random_seed
         if engine.distributed:
@@ -179,7 +195,7 @@ def main():
         # seg_model.init_weights()
 
         # group weight and config optimizer
-        optimizer = optim.SGD([{'params': filter(lambda p: p.requires_grad, seg_model.parameters()), 'lr': args.learning_rate}], 
+        optimizer = optim.SGD([{'params': filter(lambda p: p.requires_grad, seg_model.parameters()), 'lr': args.learning_rate}],
                 lr=args.learning_rate, momentum=args.momentum, weight_decay=args.weight_decay)
         optimizer.zero_grad()
 
@@ -191,10 +207,9 @@ def main():
 
         if not os.path.exists(args.snapshot_dir):
             os.makedirs(args.snapshot_dir)
-            
         run = True
         global_iteration = args.start_iters
-        avgloss = 0
+
 
         while run:
             epoch = global_iteration // len(train_loader)
@@ -228,15 +243,18 @@ def main():
                         + ' loss=%.2f' % reduce_loss.item()
 
                 pbar.set_description(print_str, refresh=False)
-
                 if (not engine.distributed) or (engine.distributed and engine.local_rank == 0):
+                    experiment.log_metrics({
+                        'loss':reduce_loss.item(),
+                        'lr': lr
+                    }, epoch=epoch, step=global_iteration)
                     if global_iteration % args.save_pred_every == 0 or global_iteration >= args.num_steps:
                         print('taking snapshot ...')
-                        torch.save(seg_model.state_dict(),osp.join(args.snapshot_dir, 'CS_scenes_'+str(global_iteration)+'.pth')) 
+                        torch.save(seg_model.state_dict(),osp.join(args.snapshot_dir, 'CS_scenes_'+str(global_iteration)+'.pth'))
 
                 if global_iteration >= args.num_steps:
                     run = False
-                    break    
+                    break
 
 
 
