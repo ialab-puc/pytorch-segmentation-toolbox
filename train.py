@@ -149,7 +149,8 @@ def main():
     with Engine(custom_parser=parser) as engine:
         args = parser.parse_args()
 
-        # Add the following code anywhere in your machine learning file
+        if engine.distributed:
+            print(f'local_rank:{engine.local_rank}')
         if (not engine.distributed) or (engine.distributed and engine.local_rank == 0):
             experiment = Experiment(api_key="",
                                     project_name="general", workspace="ironcadiz",
@@ -244,10 +245,11 @@ def main():
 
                 pbar.set_description(print_str, refresh=False)
                 if (not engine.distributed) or (engine.distributed and engine.local_rank == 0):
-                    experiment.log_metrics({
-                        'loss':reduce_loss.item(),
-                        'lr': lr
-                    }, epoch=epoch, step=global_iteration)
+                    if global_iteration % 100 == 0:
+                        experiment.log_metrics({
+                            'loss':reduce_loss.item(),
+                            'lr': lr
+                        }, epoch=epoch, step=global_iteration)
                     if global_iteration % args.save_pred_every == 0 or global_iteration >= args.num_steps:
                         print('taking snapshot ...')
                         torch.save(seg_model.state_dict(),osp.join(args.snapshot_dir, 'CS_scenes_'+str(global_iteration)+'.pth'))
