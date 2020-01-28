@@ -9,7 +9,10 @@ affine_par = True
 import functools
 
 import sys, os
-from utils.pyt_utils import load_model
+try:
+    from utils.pyt_utils import load_model
+except:
+    from segmentation.utils.pyt_utils import load_model
 
 from inplace_abn import InPlaceABN, InPlaceABNSync
 BatchNorm2d = functools.partial(InPlaceABNSync, activation='identity')
