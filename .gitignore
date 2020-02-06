@@ -9,3 +9,4 @@ snapshots/*
 results/
 outputs
 apex
+CS_scenes_*.pth

@@ -1,8 +1,8 @@
 #!/bin/bash
 
 #SBATCH --job-name=pspCityscapes       # Nombre del trabajo
-#SBATCH --output=output/psp_%j.log         # Nombre del output (%j se reemplaza por el ID del trabajo)
-#SBATCH --error=output/err/psp_%j.err          # Output de errores (opcional)
+#SBATCH --output=output/psp_eval%j.log         # Nombre del output (%j se reemplaza por el ID del trabajo)
+#SBATCH --error=output/err/psp_eval%j.err          # Output de errores (opcional)
 #SBATCH --ntasks=1                   # Correr 2 tareas
 #SBATCH --cpus-per-task=8           # Numero de cores por tarea
 #SBATCH --distribution=cyclic:cyclic # Distribuir las tareas de modo ciclico
@@ -21,6 +21,7 @@ WD=5e-4
 BS=8
 STEPS=40000
 GPU_IDS=0,1
+MODEL = pspnet
 
 #variable ${LOCAL_OUTPUT} dir can save data of you job, after exec it will be upload to hadoop_out path 
-pyenv/bin/python3  evaluate.py --data-dir ${CS_PATH} --restore-from snapshots/CS_scenes_${STEPS}.pth --gpu 0
+pyenv/bin/python3  python -m torch.distributed.launch --nproc_per_node=2 evaluate.py --data-dir ${CS_PATH} --model ${MODEL}  --batch-size 4 --restore-from snapshots/CS_scenes_${STEPS}.pth --gpu {GPU_IDS}
