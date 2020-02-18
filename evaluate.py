@@ -212,7 +212,7 @@ def main():
         seg_model = eval('networks.' + args.model + '.Seg_Model')(
             num_classes=args.num_classes
         )
-        
+
         load_model(seg_model, args.restore_from)
 
         device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -229,7 +229,7 @@ def main():
 
         data_list = []
         confusion_matrix = np.zeros((args.num_classes,args.num_classes))
-        palette = get_palette(256)
+        palette = get_palette(args.num_classes)
 
         save_path = os.path.join(os.path.dirname(args.restore_from), 'outputs')
         if not os.path.exists(save_path):
@@ -250,17 +250,26 @@ def main():
             seg_pred = np.asarray(np.argmax(output, axis=3), dtype=np.uint8)
             seg_gt = np.asarray(label.numpy()[:,:size[0],:size[1]], dtype=np.int)
 
-            for i in range(image.size(0)): 
+            for i in range(image.size(0)):
                 output_im = PILImage.fromarray(seg_pred[i])
                 output_im.putpalette(palette)
                 output_im.save(os.path.join(save_path, name[i]+'.png'))
-        
+
             ignore_index = seg_gt != 255
             seg_gt = seg_gt[ignore_index]
             seg_pred = seg_pred[ignore_index]
             # show_all(gt, output)
-            confusion_matrix += get_confusion_matrix(seg_gt, seg_pred, args.num_classes)
+            cf = get_confusion_matrix(seg_gt, seg_pred, args.num_classes)
+            confusion_matrix += cf
+            cf = torch.from_numpy(cf).contiguous().cuda()
+            cf = engine.all_reduce_tensor(cf, norm=False).cpu().numpy()
+            pos = cf.sum(1)
+            res = cf.sum(0)
+            tp = np.diag(cf)
 
+            IU_array = (tp / np.maximum(1.0, pos + res - tp))
+            mean_IU = IU_array.mean()
+            print(f'{name}:{mean_IU}')
             print_str = ' Iter{}/{}'.format(idx + 1, len(test_loader))
             pbar.set_description(print_str, refresh=False)
 
@@ -272,7 +281,7 @@ def main():
 
         IU_array = (tp / np.maximum(1.0, pos + res - tp))
         mean_IU = IU_array.mean()
-        
+
         # getConfusionMatrixPlot(confusion_matrix)
         if engine.distributed and engine.local_rank == 0:
             print({'meanIU':mean_IU, 'IU_array':IU_array})
