@@ -99,7 +99,7 @@ def pad_image(img, target_size):
     padded_img = np.pad(img, ((0, 0), (0, 0), (0, rows_missing), (0, cols_missing)), 'constant')
     return padded_img
 
-def predict_sliding(net, image, tile_size, classes, recurrence):
+def predict_sliding(net, image, tile_size, classes, recurrence, rank=1):
     interp = nn.Upsample(size=tile_size, mode='bilinear', align_corners=True)
     image_size = image.shape
     overlap = 1/3
@@ -107,11 +107,13 @@ def predict_sliding(net, image, tile_size, classes, recurrence):
     stride = ceil(tile_size[0] * (1 - overlap))
     tile_rows = int(ceil((image_size[2] - tile_size[0]) / stride) + 1)  # strided convolution formula
     tile_cols = int(ceil((image_size[3] - tile_size[1]) / stride) + 1)
-    # print("Need %i x %i prediction tiles @ stride %i px" % (tile_cols, tile_rows, stride))
+    print(f'{rank} ',"Need %i x %i prediction tiles @ stride %i px" % (tile_cols, tile_rows, stride))
     full_probs = np.zeros((image_size[0], image_size[2], image_size[3], classes))
     count_predictions = np.zeros((1, image_size[2], image_size[3], classes))
     tile_counter = 0
-
+    print(f'{rank}:full_probs:',full_probs.shape)
+    print(f'{rank}:count_predictions:',count_predictions.shape)
+    print(f'{rank}:image_size:',image_size)
     for row in range(tile_rows):
         for col in range(tile_cols):
             x1 = int(col * stride)
@@ -122,16 +124,19 @@ def predict_sliding(net, image, tile_size, classes, recurrence):
             y1 = max(int(y2 - tile_size[0]), 0)  # for very few rows y1 underflows
 
             img = image[:, :, y1:y2, x1:x2]
+            print(f'{rank}:img:',img.shape)
             padded_img = pad_image(img, tile_size)
-            # plt.imshow(padded_img)
-            # plt.show()
+            print(f'{rank}:padded_img:',padded_img.shape)
             tile_counter += 1
-            # print("Predicting tile %i" % tile_counter)
+            print(f'{rank} ',"Predicting tile %i" % tile_counter)
             padded_prediction = net(torch.from_numpy(padded_img).cuda(non_blocking=True))
             if isinstance(padded_prediction, list):
                 padded_prediction = padded_prediction[0]
+            print(f'{rank}:padded_prediction1:',padded_prediction.size())
             padded_prediction = interp(padded_prediction).cpu().numpy().transpose(0,2,3,1)
+            print(f'{rank}:padded_prediction2:',padded_prediction.shape)
             prediction = padded_prediction[0, 0:img.shape[2], 0:img.shape[3], :]
+            print(f'{rank}:prediction',prediction.shape)
             count_predictions[0, y1:y2, x1:x2] += 1
             full_probs[:, y1:y2, x1:x2] += prediction  # accumulate the predictions also in the overlapping regions
 
@@ -152,7 +157,7 @@ def predict_whole(net, image, tile_size, recurrence):
     prediction = interp(prediction).cpu().numpy().transpose(0,2,3,1)
     return prediction
 
-def predict_multiscale(net, image, tile_size, scales, classes, flip_evaluation, recurrence):
+def predict_multiscale(net, image, tile_size, scales, classes, flip_evaluation, recurrence,rank=1):
     """
     Predict an image by looking at it with different scales.
         We choose the "predict_whole_img" for the image with less than the original input size,
@@ -165,7 +170,8 @@ def predict_multiscale(net, image, tile_size, scales, classes, flip_evaluation, 
         scale = float(scale)
         scale_image = ndimage.zoom(image, (1.0, 1.0, scale, scale), order=1, prefilter=False)
         # scaled_probs = predict_whole(net, scale_image, tile_size, recurrence)
-        scaled_probs = predict_sliding(net, scale_image, tile_size, classes, recurrence)
+        print("running predict sliding")
+        scaled_probs = predict_sliding(net, scale_image, tile_size, classes, recurrence,rank)
         if flip_evaluation == True:
             # flip_scaled_probs = predict_whole(net, scale_image[:,:,:,::-1].copy(), tile_size, recurrence)
             flip_scaled_probs = predict_sliding(net, scale_image[:,:,:,::-1].copy(), tile_size, classes, recurrence)
@@ -236,15 +242,15 @@ def main():
             os.makedirs(save_path)
 
         bar_format = '{desc}[{elapsed}<{remaining},{rate_fmt}]'
-        pbar = tqdm(range(len(test_loader)), file=sys.stdout,
-                    bar_format=bar_format)
+        # pbar = tqdm(range(len(test_loader)), file=sys.stdout,
+        #             bar_format=bar_format)
         dataloader = iter(test_loader)
 
-        for idx in pbar:
+        for idx in range(len(test_loader)):
             image, label, size, name = dataloader.next()
             size = size[0].numpy()
             with torch.no_grad():
-                output = predict_multiscale(model, image, input_size, [1.0], args.num_classes, False, 0)
+                output = predict_multiscale(model, image, input_size, [1.0], args.num_classes, False, 0, rank=engine.local_rank)
 
 
             seg_pred = np.asarray(np.argmax(output, axis=3), dtype=np.uint8)
@@ -258,20 +264,19 @@ def main():
             ignore_index = seg_gt != 255
             seg_gt = seg_gt[ignore_index]
             seg_pred = seg_pred[ignore_index]
-            # show_all(gt, output)
+
+
             cf = get_confusion_matrix(seg_gt, seg_pred, args.num_classes)
             confusion_matrix += cf
-            cf = torch.from_numpy(cf).contiguous().cuda()
-            cf = engine.all_reduce_tensor(cf, norm=False).cpu().numpy()
             pos = cf.sum(1)
             res = cf.sum(0)
             tp = np.diag(cf)
 
             IU_array = (tp / np.maximum(1.0, pos + res - tp))
             mean_IU = IU_array.mean()
-            print(f'{name}:{mean_IU}')
-            print_str = ' Iter{}/{}'.format(idx + 1, len(test_loader))
-            pbar.set_description(print_str, refresh=False)
+            print(f'{engine.local_rank}:{name}:{mean_IU}')
+            #print_str = ' Iter{}/{}'.format(idx + 1, len(test_loader))
+            #pbar.set_description(print_str, refresh=False)
 
         confusion_matrix = torch.from_numpy(confusion_matrix).contiguous().cuda()
         confusion_matrix = engine.all_reduce_tensor(confusion_matrix, norm=False).cpu().numpy()
