@@ -111,9 +111,6 @@ def predict_sliding(net, image, tile_size, classes, recurrence, rank=1):
     full_probs = np.zeros((image_size[0], image_size[2], image_size[3], classes))
     count_predictions = np.zeros((1, image_size[2], image_size[3], classes))
     tile_counter = 0
-    print(f'{rank}:full_probs:',full_probs.shape)
-    print(f'{rank}:count_predictions:',count_predictions.shape)
-    print(f'{rank}:image_size:',image_size)
     for row in range(tile_rows):
         for col in range(tile_cols):
             x1 = int(col * stride)
@@ -124,19 +121,13 @@ def predict_sliding(net, image, tile_size, classes, recurrence, rank=1):
             y1 = max(int(y2 - tile_size[0]), 0)  # for very few rows y1 underflows
 
             img = image[:, :, y1:y2, x1:x2]
-            print(f'{rank}:img:',img.shape)
             padded_img = pad_image(img, tile_size)
-            print(f'{rank}:padded_img:',padded_img.shape)
             tile_counter += 1
-            print(f'{rank} ',"Predicting tile %i" % tile_counter)
             padded_prediction = net(torch.from_numpy(padded_img).cuda(non_blocking=True))
             if isinstance(padded_prediction, list):
                 padded_prediction = padded_prediction[0]
-            print(f'{rank}:padded_prediction1:',padded_prediction.size())
             padded_prediction = interp(padded_prediction).cpu().numpy().transpose(0,2,3,1)
-            print(f'{rank}:padded_prediction2:',padded_prediction.shape)
-            prediction = padded_prediction[0, 0:img.shape[2], 0:img.shape[3], :]
-            print(f'{rank}:prediction',prediction.shape)
+            prediction = padded_prediction[:, 0:img.shape[2], 0:img.shape[3], :]
             count_predictions[0, y1:y2, x1:x2] += 1
             full_probs[:, y1:y2, x1:x2] += prediction  # accumulate the predictions also in the overlapping regions
 
@@ -170,7 +161,6 @@ def predict_multiscale(net, image, tile_size, scales, classes, flip_evaluation, 
         scale = float(scale)
         scale_image = ndimage.zoom(image, (1.0, 1.0, scale, scale), order=1, prefilter=False)
         # scaled_probs = predict_whole(net, scale_image, tile_size, recurrence)
-        print("running predict sliding")
         scaled_probs = predict_sliding(net, scale_image, tile_size, classes, recurrence,rank)
         if flip_evaluation == True:
             # flip_scaled_probs = predict_whole(net, scale_image[:,:,:,::-1].copy(), tile_size, recurrence)
