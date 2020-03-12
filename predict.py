@@ -61,6 +61,10 @@ def get_parser():
                         help="choose the number of recurrence.")
     parser.add_argument("--input-size", type=str, default=INPUT_SIZE,
                         help="Comma-separated string with height and width of images.")
+    parser.add_argument("--num-workers", type=int, default=8,
+                        help="choose the number of recurrence.")
+    parser.add_argument("--whole", type=bool, default=False,
+                        help="use whole input size.")
     return parser
 
 
