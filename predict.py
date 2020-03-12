@@ -12,19 +12,17 @@ from torch.autograd import Variable
 import torchvision.models as models
 import torch.nn.functional as F
 from torch.utils import data
-from networks.pspnet import Seg_Model
+import networks
 from dataset.datasets import CSDataTestSet
 from collections import OrderedDict
 import os
 import scipy.ndimage as nd
 from math import ceil
 from PIL import Image as PILImage
+from utils.pyt_utils import load_model
 from evaluate import get_palette, predict_multiscale, predict_sliding, get_confusion_matrix, predict_whole
-
+from engine import Engine
 import torch.nn as nn
-if torch.__version__[0] == '1':
-    import torch.distributed as dist
-    dist.init_process_group('gloo', init_method='file:///tmp/tmpfile', rank=0, world_size=1)
 
 IMG_MEAN = np.array((104.00698793,116.66876762,122.67891434), dtype=np.float32)
 
@@ -36,7 +34,7 @@ NUM_STEPS = 500 # Number of images in the validation set.
 INPUT_SIZE = '340,480'
 RESTORE_FROM = './deeplab_resnet.ckpt'
 
-def get_arguments():
+def get_parser():
     """Parse all the arguments provided from the CLI.
     
     Returns:
@@ -59,50 +57,58 @@ def get_arguments():
                         help="choose the number of recurrence.")
     parser.add_argument("--input-size", type=str, default=INPUT_SIZE,
                         help="Comma-separated string with height and width of images.")
-    return parser.parse_args()
+    return parser
 
 
 def main():
     """Create the model and start the evaluation process."""
-    args = get_arguments()
+    parser = get_parser()
 
-    # gpu0 = args.gpu
-    os.environ["CUDA_VISIBLE_DEVICES"]=args.gpu
-    h, w = map(int, args.input_size.split(','))
-    input_size = (h, w)
+    with Engine(custom_parser=parser) as engine:
+        args = parser.parse_args()
 
-    model = Seg_Model(num_classes=args.num_classes)
+        cudnn.benchmark = True
+        h, w = map(int, args.input_size.split(','))
+        input_size = (h, w)
 
-    saved_state_dict = torch.load(args.restore_from, map_location='cpu')
-    model.load_state_dict(saved_state_dict)
+        seg_model = eval('networks.' + args.model + '.Seg_Model')(
+            num_classes=args.num_classes
+        )
 
-    model.eval()
-    model.cuda()
+        load_model(seg_model, args.restore_from)
 
-    testloader = data.DataLoader(CSDataTestSet(args.data_dir, args.data_list, crop_size=input_size, mean=IMG_MEAN),
-                                    batch_size=1, shuffle=False, pin_memory=True)
+        device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        seg_model.to(device)
 
-    data_list = []
-    confusion_matrix = np.zeros((args.num_classes,args.num_classes))
-    palette = get_palette(256)
-    # interp = nn.Upsample(size=(1024, 2048), mode='bilinear', align_corners=True)
+        model = engine.data_parallel(seg_model)
+        model.eval()
 
-    if not os.path.exists('outputs'):
-        os.makedirs('outputs')
+        dataset = data.DataLoader(CSDataTestSet(args.data_dir, args.data_list, crop_size=input_size, mean=IMG_MEAN),
+                                        batch_size=1, shuffle=False, pin_memory=True)
+        test_loader, test_sampler = engine.get_test_loader(dataset)
 
-    for index, batch in enumerate(testloader):
-        if index % 100 == 0:
-            print('%d processd'%(index))
-        image, name, size = batch
-        size = size[0].numpy()
-        with torch.no_grad():
-            # output = predict_sliding(model, image.numpy(), input_size, args.num_classes, True, args.recurrence)
-            output = predict_whole(model, image.numpy(), input_size, args.recurrence)
-        seg_pred = np.asarray(np.argmax(output, axis=2), dtype=np.uint8)
-        output_im = PILImage.fromarray(seg_pred)
-        output_im.putpalette(palette)
-        # output_im = output_im.crop((0, 0, w, h))
-        output_im.save('outputs/'+name[0]+'.png')
+        if engine.distributed:
+            test_sampler.set_epoch(0)
+
+        palette = get_palette(NUM_CLASSES)
+        # interp = nn.Upsample(size=(1024, 2048), mode='bilinear', align_corners=True)
+
+        if not os.path.exists('outputs'):
+            os.makedirs('outputs')
+
+        for index, batch in enumerate(dataset):
+            if index % 100 == 0:
+                print('%d processd'%(index))
+            image, name, size = batch
+            size = size[0].numpy()
+            with torch.no_grad():
+                # output = predict_sliding(model, image.numpy(), input_size, args.num_classes, True, args.recurrence)
+                output = predict_whole(model, image.numpy(), input_size, args.recurrence)
+            seg_pred = np.asarray(np.argmax(output, axis=2), dtype=np.uint8)
+            output_im = PILImage.fromarray(seg_pred)
+            output_im.putpalette(palette)
+            # output_im = output_im.crop((0, 0, w, h))
+            output_im.save('outputs/'+name[0]+'.png')
 
 if __name__ == '__main__':
     main()

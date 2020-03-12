@@ -19,8 +19,8 @@ CS_PATH=$1
 LR=1e-2
 WD=5e-4
 BS=8
-STEPS=40000
+STEPS=60000
 GPU_IDS=0
 
-#variable ${LOCAL_OUTPUT} dir can save data of you job, after exec it will be upload to hadoop_out path 
-pyenv/bin/python3  predict.py --data-dir ${CS_PATH} --datalist ./dataset/list/placepulse/test.lst --restore-from snapshots/CS_scenes_${STEPS}.pth --gpu 0
+#variable ${LOCAL_OUTPUT} dir can save data of you job, after exec it will be upload to hadoop_out path
+pyenv/bin/python3  python -m torch.distributed.launch --nproc_per_node=2 predict.py --data-dir ${CS_PATH} --datalist ./dataset/list/placepulse/test.lst --restore-from snapshots/CS_scenes_${STEPS}.pth --gpu 0
