@@ -34,7 +34,7 @@ NUM_CLASSES = 19
 NUM_STEPS = 500 # Number of images in the validation set.
 INPUT_SIZE = '340,480'
 RESTORE_FROM = './deeplab_resnet.ckpt'
-BATCH_SIZE = 8
+BATCH_SIZE = 2
 
 def get_parser():
     """Parse all the arguments provided from the CLI.
@@ -91,8 +91,7 @@ def main():
         model = engine.data_parallel(seg_model)
         model.eval()
 
-        dataset = data.DataLoader(CSDataTestSet(args.data_dir, args.data_list, crop_size=input_size, mean=IMG_MEAN),
-                                        batch_size=1, shuffle=False, pin_memory=True)
+        dataset = CSDataTestSet(args.data_dir, args.data_list, crop_size=input_size, mean=IMG_MEAN)
         test_loader, test_sampler = engine.get_test_loader(dataset)
 
         if engine.distributed:
@@ -104,7 +103,7 @@ def main():
         if not os.path.exists('outputs'):
             os.makedirs('outputs')
 
-        for index, batch in enumerate(dataset):
+        for index, batch in enumerate(test_loader):
             if index % 100 == 0:
                 print('%d processd'%(index))
             image, name, size = batch
@@ -112,8 +111,8 @@ def main():
             with torch.no_grad():
                 # output = predict_sliding(model, image.numpy(), input_size, args.num_classes, True, args.recurrence)
                 output = predict_whole(model, image.numpy(), input_size, args.recurrence)
-            seg_pred = np.asarray(np.argmax(output, axis=2), dtype=np.uint8)
-            output_im = PILImage.fromarray(seg_pred)
+            seg_pred = np.asarray(np.argmax(output, axis=3), dtype=np.uint8)
+            output_im = PILImage.fromarray(seg_pred[0])
             output_im.putpalette(palette)
             # output_im = output_im.crop((0, 0, w, h))
             output_im.save('outputs/'+name[0]+'.png')
