@@ -72,7 +72,7 @@ def main():
         h, w = map(int, args.input_size.split(','))
         input_size = (h, w)
 
-        seg_model = eval('networks.' + args.model + '.Seg_Model')(
+        seg_model = networks.pspnet.Seg_Model(
             num_classes=args.num_classes
         )
 
