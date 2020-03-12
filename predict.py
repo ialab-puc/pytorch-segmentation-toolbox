@@ -11,6 +11,7 @@ import torch
 from torch.autograd import Variable
 import torchvision.models as models
 import torch.nn.functional as F
+import torch.backends.cudnn as cudnn
 from torch.utils import data
 import networks
 from dataset.datasets import CSDataTestSet
