@@ -34,6 +34,7 @@ NUM_CLASSES = 19
 NUM_STEPS = 500 # Number of images in the validation set.
 INPUT_SIZE = '340,480'
 RESTORE_FROM = './deeplab_resnet.ckpt'
+BATCH_SIZE = 8
 
 def get_parser():
     """Parse all the arguments provided from the CLI.
@@ -48,6 +49,8 @@ def get_parser():
                         help="Path to the file listing the images in the dataset.")
     parser.add_argument("--ignore-label", type=int, default=IGNORE_LABEL,
                         help="The index of the label to ignore during the training.")
+    parser.add_argument("--batch-size", type=int, default=BATCH_SIZE,
+                        help="Number of images sent to the network in one step.")
     parser.add_argument("--num-classes", type=int, default=NUM_CLASSES,
                         help="Number of classes to predict (including background).")
     parser.add_argument("--restore-from", type=str, default=RESTORE_FROM,
